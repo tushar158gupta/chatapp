@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parent → Iframe Token Passing</title>
+    <style>
+        iframe {
+            width: 420px;
+            height: 650px;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Parent → Iframe Token Passing</h2>
+
+<iframe id="chat-frame" src="/index.html"></iframe>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    if (!token) {
+        alert("Token missing in parent URL");
+    }
+
+    const chatFrame = document.getElementById("chat-frame");
+
+    chatFrame.onload = () => {
+        chatFrame.contentWindow.postMessage(
+            { type: "SEND_TOKEN", token },
+            "*"
+        );
+    };
+</script>
+
+</body>
+</html>

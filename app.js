@@ -3,9 +3,11 @@ const path = require("path");
 const app = express();
 
 const PORT = process.env.PORT || 4000;
+
 const server = app.listen(PORT, () => {
     console.log("running on port 4000")
 });
+
 
 const jwt = require("jsonwebtoken");
 const io = require("socket.io")(server);
