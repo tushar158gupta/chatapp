@@ -39,6 +39,16 @@
             border: none;
             flex: 1;
         }
+        #dlnv-chat {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+iframe {
+    flex: 1 !important;
+    height: 100% !important;
+}
+
         @media (max-width: 768px) {
             .chat-wrapper { height: 95vh; max-width: 100%; border-radius: 16px; }
             .chat-title { font-size: 20px; padding: 16px; }
@@ -49,7 +59,10 @@
 
 <div class="chat-wrapper">
     <div class="chat-title">DailyTrades Support Group</div>
-    <iframe id="chat-frame" src="/index.html"></iframe>
+   
+    <div id="dlnv-chat" data-groupId="1234">
+        <iframe id="chat-frame" src="/index.html"></iframe>
+    </div>
 </div>
 
 <script>
@@ -81,10 +94,14 @@
 
     // === Pass token to iframe ===
     const chatFrame = document.getElementById("chat-frame");
+    const groupId = document
+    .getElementById("dlnv-chat")
+    .getAttribute("data-groupid");
+    
 
     chatFrame.onload = () => {
         chatFrame.contentWindow.postMessage(
-            { type: "SEND_TOKEN", token },
+            { type: "SEND_TOKEN", token , groupId },
             "*"  // In production, replace "*" with your domain
         );
         console.log("Token passed to iframe:", token);
