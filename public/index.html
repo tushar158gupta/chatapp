@@ -13,18 +13,32 @@
 
 </head>
 <body>
-
 <script>
-    window.IFRAME_TOKEN = null;
-    window.GROUP_ID = null;
-    window.addEventListener("message", (event) => {
-        if (event.data?.type === "SEND_TOKEN") {
-            window.IFRAME_TOKEN = event.data.token;
-                 window.GROUP_ID = event.data.groupId;
-            window.dispatchEvent(new Event("token-received"));
-        }
-    });
-    
+  console.log("CHAT IFRAME LOADED - Listening for postMessage");
+
+  window.IFRAME_TOKEN = null;
+  window.GROUP_ID = null;
+
+  window.addEventListener("message", (event) => {
+    console.log("postMessage RECEIVED in iframe!", event.data);
+    console.log("From origin:", event.origin);
+
+    if (event.data?.type === "SEND_TOKEN") {
+      console.log("TOKEN & GROUPID RECEIVED SUCCESSFULLY!");
+      console.log("Token (first 30 chars):", event.data.token.substring(0, 30) + "...");
+      console.log("GroupId:", event.data.groupId);
+
+      window.IFRAME_TOKEN = event.data.token;
+      window.GROUP_ID = event.data.groupId;
+
+      // Trigger socket connection
+      window.dispatchEvent(new Event("token-received"));
+    }
+  });
+
+  window.addEventListener("token-received", () => {
+    console.log("token-received event fired! Starting socket...");
+  });
 </script>
 
 <!-- HEADER -->

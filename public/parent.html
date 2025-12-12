@@ -66,45 +66,18 @@ iframe {
 </div>
 
 <script>
-    // === TOKEN LOGIC WITH localStorage ("lt") ===
-    const urlParams = new URLSearchParams(window.location.search);
-    let token = urlParams.get("token");
+    // ===== HARD CODED TOKEN + GROUP ID =====
+    const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  // PUT YOUR JWT HERE
+    const groupId = "1234";                // PUT YOUR GROUP ID HERE
 
-    // If token exists in URL → save it to localStorage
-    if (token) {
-        localStorage.setItem("lt", token);
-        console.log("Token saved to localStorage:", token);
-
-        // Optional: Clean the URL without reloading
-        const newUrl = window.location.pathname;
-        history.replaceState(null, '', newUrl);
-    }
-
-    // Always try to get token from localStorage (fallback)
-    token = localStorage.getItem("lt");
-
-    if (!token) {
-        document.body.innerHTML = `
-            <div style="color:white; text-align:center; font-size:20px; padding:20px;">
-                No token found!<br><br>
-                Please open with: <code>?token=your_jwt_here</code>
-            </div>`;
-        throw new Error("No token");
-    }
-
-    // === Pass token to iframe ===
     const chatFrame = document.getElementById("chat-frame");
-    const groupId = document
-    .getElementById("dlnv-chat")
-    .getAttribute("data-groupid");
-    
 
     chatFrame.onload = () => {
         chatFrame.contentWindow.postMessage(
-            { type: "SEND_TOKEN", token , groupId },
-            "*"  // In production, replace "*" with your domain
+            { type: "SEND_TOKEN", token, groupId },
+            "*"
         );
-        console.log("Token passed to iframe:", token);
+        console.log("Hardcoded token + groupId sent to iframe");
     };
 </script>
 

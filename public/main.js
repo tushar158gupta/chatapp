@@ -1,168 +1,146 @@
-function startSocket(token) {
-  console.log("🔵 [SOCKET] Starting socket with token:", token);
+// public/main.js  ←  REPLACE YOUR ENTIRE FILE WITH THIS ONE
 
-  const socket = io({ auth: { token } });
-  console.log("🟦 [SOCKET] io() initialized");
+function startSocket(token, groupId) {
+  console.log("[CHAT] Starting Socket.IO connection...");
+  console.log("[CHAT] Token (first 30):", token.substring(0, 30) + "...");
+  console.log("[CHAT] Group ID:", groupId);
 
+  const socket = io({
+    auth: {
+      token: token,        // Required by your backend JWT decode
+      groupId: groupId     // REQUIRED – your backend checks this!
+    }
+  });
+
+  // Select UI elements
   const clienttotal = document.getElementById("clients-total");
   const messageContainer = document.getElementById("message-container");
   const messageform = document.getElementById("message-form");
   const messageinput = document.getElementById("message-input");
 
   let currentUserName = "User";
-  console.log("👤 Current username (default):", currentUserName);
 
   // Pagination state
   let oldestTime = null;
   let loadingOld = false;
 
-  // ----------------------------
-  // LOAD INITIAL MESSAGES
-  // ----------------------------
+  // Load initial messages
   async function loadInitialMessages() {
-    console.log("📥 [LOAD] Loading initial messages...");
     try {
-      console.log("➡️ [FETCH] GET /messages");
       const res = await fetch(
         `/messages?groupId=${window.GROUP_ID}&limit=20`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (!res.ok) {
-        console.error("❌ Failed to fetch messages:", res.status, await res.text());
-        return;
-      }
+      if (!res.ok) throw new Error("Failed to load messages");
 
       const data = await res.json();
-      console.log("📦 [LOAD] Initial messages received:", data.length);
 
       data.forEach((msg) => {
         const isOwn = msg.sender === currentUserName;
-        addmessagetoui(isOwn, msg, false);
+        addMessageToUI(isOwn, msg, false);
       });
 
-      if (data.length > 0) {
-        oldestTime = data[0].timestamp;
-        console.log("⏳ Oldest message timestamp:", oldestTime);
-      }
+      if (data.length > 0) oldestTime = data[0].timestamp;
 
       messageContainer.scrollTop = messageContainer.scrollHeight;
-      console.log("📜 UI scrolled to bottom");
-
     } catch (err) {
-      console.error("❌ Error loading initial messages:", err);
+      console.error("Error loading messages:", err);
     }
   }
 
   loadInitialMessages();
 
-  // ----------------------------
-  // INFINITE SCROLL TOP
-  // ----------------------------
+  // Infinite scroll
   messageContainer.addEventListener("scroll", async () => {
     if (messageContainer.scrollTop === 0 && !loadingOld && oldestTime) {
-      console.log("⬆️ [SCROLL] User reached top → loading older messages...");
       loadingOld = true;
-
       const prevHeight = messageContainer.scrollHeight;
 
-      console.log("➡️ [FETCH] GET older messages before:", oldestTime);
       const res = await fetch(
         `/messages?groupId=${window.GROUP_ID}&limit=20&before=${oldestTime}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       const older = await res.json();
-      console.log("📦 [SCROLL] Older messages received:", older.length);
 
       if (older.length > 0) {
         oldestTime = older[0].timestamp;
-        console.log("⏳ Updated oldest timestamp:", oldestTime);
-
         older.forEach((msg) => {
           const isOwn = msg.sender === currentUserName;
-          addmessagetoui(isOwn, msg, false, true);
+          addMessageToUI(isOwn, msg, false, true);
         });
-
-        messageContainer.scrollTop =
-          messageContainer.scrollHeight - prevHeight;
+        messageContainer.scrollTop = messageContainer.scrollHeight - prevHeight;
       }
-
       loadingOld = false;
     }
   });
 
-  // ----------------------------
-  // SOCKET EVENTS
-  // ----------------------------
+  // Socket events
+  socket.on("connect", () => {
+    console.log("[SOCKET] Connected!");
+  });
+
   socket.on("connect_error", (err) => {
-    console.log("❌ [SOCKET ERROR]", err.message);
-    alert("Access Denied: " + err.message);
+    console.error("[SOCKET ERROR]", err.message);
+    alert("Chat Access Denied: " + err.message);
   });
 
   socket.on("user-data", (user) => {
-    console.log("👤 [SOCKET] Received user data:", user);
-
+    console.log("[SOCKET] User data received:", user);
     document.getElementById("user-info").innerText =
-      `Logged in as: ${user.name} (${user.role})`;
-
+      `Logged in as: ${user?.name} (${user?.role})`;
     currentUserName = user.name;
-    console.log("👤 Updated currentUserName →", currentUserName);
   });
 
+  socket.on("chat-message", (data) => {
+    const isOwn = data.sender === currentUserName;
+    addMessageToUI(isOwn, data, true);
+  });
+
+  socket.on("clients-total", (count) => {
+    clienttotal.innerText = `Clients: ${count}`;
+  });
+
+  // Send message
   messageform.addEventListener("submit", (e) => {
     e.preventDefault();
-    sendmessage();
+    sendMessage();
   });
 
-  function sendmessage() {
-    if (!messageinput.value.trim()) {
-      console.log("⚠️ [SEND] Empty message — ignored");
-      return;
-    }
+  function sendMessage() {
+    if (!messageinput.value.trim()) return;
 
     const msg = {
-      name: currentUserName,
       message: messageinput.value.trim(),
-      dateTime: new Date(),
       groupId: window.GROUP_ID
     };
 
-    console.log("📤 [SEND] Emitting message:", msg);
-
     socket.emit("message", msg);
-    addmessagetoui(true, msg);
 
+    const outgoingMsg = {
+      sender: currentUserName,
+      message: msg.message,
+      timestamp: new Date(),
+      groupId: window.GROUP_ID
+    };
+
+    addMessageToUI(true, outgoingMsg);
     messageinput.value = "";
   }
 
-  socket.on("chat-message", (data) => {
-    console.log("📩 [RECEIVE] New message received:", data);
-    const isOwn = data.sender === currentUserName;
-    addmessagetoui(isOwn, data, true);
-  });
-
-  // ----------------------------
-  // ADD MESSAGE TO UI
-  // ----------------------------
-  function addmessagetoui(isOwn, data, scrollDown = true, prepend = false) {
-    console.log(
-      `📝 [UI] Adding message — isOwn:${isOwn}, prepend:${prepend}`,
-      data
-    );
-
-    clearfeedback();
+  // Add message to UI
+  function addMessageToUI(isOwn, data, scrollDown = true, prepend = false) {
+    clearFeedback();
 
     const item = document.createElement("li");
     item.className = isOwn ? "message-right" : "message-left";
 
     item.innerHTML = `
       <div class="message-bubble">
-          ${data.message}
-          <span class="message-meta">
-            ${(data.sender || data.name)} —
-            ${moment(data.timestamp || data.dateTime).fromNow()}
-          </span>
+        ${data.message}
+        <span class="message-meta">
+          ${data.sender || data.name} — ${moment(data.timestamp || data.dateTime).fromNow()}
+        </span>
       </div>
     `;
 
@@ -177,20 +155,10 @@ function startSocket(token) {
     }
   }
 
-  // ----------------------------
-  // TYPING INDICATOR
-  // ----------------------------
+  // Typing indicator
   let typingTimer;
-
-  const sendTyping = () => {
-    console.log("⌨️ [TYPING] User typing…");
-    socket.emit("feedback", { feedback: `${currentUserName} is typing...` });
-  };
-
-  const stopTyping = () => {
-    console.log("⌨️ [TYPING] User stopped typing");
-    socket.emit("feedback", { feedback: "" });
-  };
+  const sendTyping = () => socket.emit("feedback", { feedback: `${currentUserName} is typing...` });
+  const stopTyping = () => socket.emit("feedback", { feedback: "" });
 
   messageinput.addEventListener("keypress", () => {
     clearTimeout(typingTimer);
@@ -203,9 +171,7 @@ function startSocket(token) {
   });
 
   socket.on("feedback", (data) => {
-    console.log("💬 [FEEDBACK] Typing update:", data);
-
-    clearfeedback();
+    clearFeedback();
     if (data.feedback) {
       const el = document.createElement("div");
       el.className = "message-feedback";
@@ -214,26 +180,33 @@ function startSocket(token) {
     }
   });
 
-  function clearfeedback() {
+  function clearFeedback() {
     document.getElementById("feedback-container").innerHTML = "";
   }
-
-  socket.on("clients-total", (count) => {
-    console.log("👥 [ONLINE USERS] Count updated:", count);
-    clienttotal.innerText = `Client: ${count}`;
-  });
 }
 
-// Token logic
-window.addEventListener("token-received", () => {
-  console.log("🔑 [TOKEN EVENT] Token received from parent iframe");
-  startSocket(window.IFRAME_TOKEN);
+// ————————————————————————————————————————
+// RECEIVE TOKEN FROM ANGULAR PARENT PAGE
+// ————————————————————————————————————————
+window.addEventListener("message", (event) => {
+  console.log("[IFRAME] postMessage received:", event.data);
+
+  if (event.data?.type === "SEND_TOKEN") {
+    console.log("TOKEN & GROUPID RECEIVED FROM ANGULAR!");
+    console.log("Token preview:", event.data.token.substring(0, 30) + "...");
+    console.log("Group ID:", event.data.groupId);
+
+    if(event.data.token==null || event.data.groupId){
+          window.IFRAME_TOKEN =  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  // PUT YOUR JWT HERE
+    window.GROUP_ID = "1234";  
+    }
+    window.IFRAME_TOKEN = event.data.token;
+    window.GROUP_ID = event.data.groupId;
+
+
+    // Start the chat
+    startSocket(window.IFRAME_TOKEN, window.GROUP_ID);
+  }
 });
 
-const urlParams = new URLSearchParams(window.location.search);
-const directToken = urlParams.get("token");
 
-if (directToken) {
-  console.log("🔑 [URL TOKEN] Token found in URL");
-  startSocket(directToken);
-}
