@@ -50,6 +50,7 @@ function startSocket(token, groupId) {
     }
   }
 
+
   loadInitialMessages();
 
   // Infinite scroll
@@ -81,6 +82,11 @@ function startSocket(token, groupId) {
     // console.log("[SOCKET] Connected!");
   });
 
+  socket.on("group-info-update" , (groupInfo)=>{
+    window.groupInfo = groupInfo
+    // console.log("Received group info update:", groupInfo);
+  })
+
   socket.on("connect_error", (err) => {
     console.error("[SOCKET ERROR]", err.message);
     alert("Chat Access Denied: " + err.message);
@@ -99,6 +105,12 @@ function startSocket(token, groupId) {
     // console.log("adding the chat to the page")
    if (!isOwn) {
     // console.log("trying to send the notification")
+    // console.log(" window group info: for image", window.groupInfo);
+    
+        const userid = data.userId;
+      const participant = window.groupInfo?.participants?.[userid] || null;
+const userimage = participant?.image || null;
+
     window.parent.postMessage(
       {
         type: "NEW_CHAT_MESSAGE",
@@ -106,6 +118,7 @@ function startSocket(token, groupId) {
           message: data.message,
           sender: data.sender,
           groupId: data.groupId,
+          image: userimage
         }
       },
       "*"

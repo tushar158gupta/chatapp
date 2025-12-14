@@ -1,0 +1,1 @@
+const roles = ["USER", "ADVISOR", "ADMIN"];
