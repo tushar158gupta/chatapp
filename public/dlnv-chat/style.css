@@ -183,6 +183,45 @@ body {
 .message-form button:active {
     transform: scale(0.98);
 }
+/* Message row layout */
+.message-left {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.message-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Avatar */
+.avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Fallback avatar */
+.avatar-fallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #adb5bd;
+  color: white;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+
 
 /* Mobile */
 @media (max-width: 480px) {

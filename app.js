@@ -8,6 +8,7 @@ const socketio = require("socket.io");
 const OpenTraderScripts = require("./models/openTraderScripts.model");
 const Trader = require("./models/trader.model");
 const Advisor = require("./models/advisor.model");
+const Associates = require("./models/associates.model");
 
 const PORT = process.env.PORT || 8000;
 require("dotenv").config();
@@ -16,9 +17,10 @@ require("dotenv").config();
 //----------------------------------------------------
 // 1) Connect to MongoDB
 //----------------------------------------------------
-console.log("Mongo URI Loaded:", !!process.env.MONGODB_URI);
 mongoose
-  .connect( process.env.MONGODB_URI )
+  .connect(
+    "mongodb+srv://qareadonly:4daGEbRiLI68VTpK@dlnv-qa.svztmll.mongodb.net/dlnv-db?retryWrites=true&w=majority&appName=DLNV-QA"
+  )
   .then(() => console.log("Mongo connected"))
   .catch((e) => console.error("Mongo connection error", e));
 
@@ -99,14 +101,16 @@ io.use((socket, next) => {
 const  groupId = socket.handshake.auth.groupId;
 
   if (!token) return next(new Error("Unauthorized: No token provided"));
+  if (!groupId) return next(new Error("Unauthorized: No groupId provided"));
+
 
   try {
-    const decoded = decodeJWT(token);
+    const decoded = jwt.verify(token, JWT_SECRET);
 
     if (!ALLOWED_ROLES.includes(decoded?.user?.role || decoded?.user?.rType)) {
       return next(new Error("Unauthorized: Role not allowed"));
     }
-    // console.log("Decoded JWT:", decoded.user?.fName);
+    console.log("Decoded JWT:", decoded);
     let name = "";
     if(decoded.user?.profile?.fName){
       name =`${decoded.user?.profile?.fName} ${ decoded.user?.profile?.lName}` 
@@ -117,7 +121,7 @@ const  groupId = socket.handshake.auth.groupId;
     socket.user = {
       name: name,
       email: decoded.user?.profile?.email || decoded?.user?.email,
-      role: decoded.user?.role || decoded?.user?.role,
+      role: decoded.user?.role || decoded?.user?.role||decoded?.user?.rType,
       userId: decoded.user?.id,
     };
 
@@ -143,10 +147,95 @@ async function flushBatchToMongo() {
   // await redis.del(BATCH_KEY);
 }
 
+async function verifyApiToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    const groupId = req.query.groupId || req.body.groupId;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Unauthorized: No token" });
+    }
+
+    if (!groupId) {
+      return res.status(400).json({ message: "groupId is required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // ✅ Verify JWT
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const role =
+      decoded?.user?.role ||
+      decoded?.user?.rType;
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(403).json({ message: "Forbidden: Role not allowed" });
+    }
+
+    const userId = decoded.user?.id;
+
+    // 🔥 GROUP ACCESS CHECK
+    let hasAccess = false;
+
+    // Admin → always allowed
+    if (role.toLowerCase() === "admin") {
+      hasAccess = true;
+    } else {
+      const openScripts = await OpenTraderScripts.find({
+        scriptId: new mongoose.Types.ObjectId(groupId),
+      });
+
+      for (const os of openScripts) {
+        // Trader
+        if (os.traderId?.toString() === userId) {
+          hasAccess = true;
+          break;
+        }
+
+        // Advisor (nested path)
+        if (
+          os.otherInfo?.script?.userId?.toString() === userId
+        ) {
+          hasAccess = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        message: "Forbidden: You are not part of this group",
+      });
+    }
+
+    // ✅ Attach user to request
+    req.user = {
+      userId,
+      role,
+      email:
+        decoded.user?.profile?.email ||
+        decoded.user?.email,
+      name: decoded.user?.profile?.fName
+        ? `${decoded.user.profile.fName} ${decoded.user.profile.lName || ""}`
+        : `${decoded.user?.fName || ""} ${decoded.user?.lName || ""}`,
+    };
+
+    next();
+  } catch (err) {
+    console.error("API auth error:", err.message);
+    return res.status(401).json({
+      message: "Unauthorized: Invalid or expired token",
+    });
+  }
+}
+
+
+
 //----------------------------------------------------
 // 9) Fetch messages
 //----------------------------------------------------
-app.get("/dlnv-chat/support/messages", async (req, res) => {
+app.get("/dlnv-chat/support/messages" ,verifyApiToken ,   async (req, res) => {
   const groupId = req.query.groupId;
   const limit = parseInt(req.query.limit || 20);
   const before = req.query.before;
@@ -170,7 +259,7 @@ app.get("/dlnv-chat/support/messages", async (req, res) => {
 
   res.json(all.reverse());
 });
-app.get(`/dlnv-chat/support/groupInfo`, async (req, res) => {
+app.get(`/dlnv-chat/support/groupInfo`,verifyApiToken ,  async (req, res) => {
   try {
     const groupId = req.query.groupId;
     const activeClients = onlineGroupUsers[groupId]?.size || 0;
@@ -252,6 +341,8 @@ async function getGroupInfo(groupId) {
     { "profile.fName": 1, "profile.lName": 1 }
   );
 
+  const admins = await Associates.find();
+
   const advisors = await Advisor.find(
     { _id: { $in: advisorIds } },
     { fName: 1, lName: 1, dp: 1 }
@@ -281,6 +372,17 @@ async function getGroupInfo(groupId) {
       role: "trader",
     };
   });
+  // Admins
+admins.forEach((adm) => {
+  participants[adm._id.toString()] = {
+    fname: adm?.fName || "Daily Trades",
+    lname: adm?.lName || "Admin",
+    userId: adm?._id,
+    image: adm?.dp || "",
+    role: "admin",
+  };
+});
+
 
   return {
     groupId,
@@ -300,7 +402,14 @@ async function getGroupInfo(groupId) {
       userId: t._id,
       image: "",
     })),
-    adminInfo: [],
+    adminInfo: admins.map((adm) => ({
+  fname: adm?.fName || "Daily Trades",
+  lname: adm?.lName || "Admin",
+  userId: adm?._id,
+  image: adm?.dp || "",
+})),
+
+    
   };
 }
 
@@ -327,7 +436,7 @@ io.on("connection", async (socket) => {
   const role = socket.user.role;
   // console.log("User role========================:", role);
 
-  if (role.toLowerCase() !="admin"&& role.toLowerCase()!="advisor") {
+  if (role?.toLowerCase() !="admin"&& role?.toLowerCase()!="advisor") {
     // console.log("***************************" , role.toLowerCase());
   onlineGroupUsers[groupId].add(userId);
    
@@ -339,7 +448,7 @@ io.on("connection", async (socket) => {
   io.to(groupId).emit("group-online-count", onlineGroupUsers[groupId].size);
 
   const groupInfo = await getGroupInfo(groupId);
-  // console.log("groupInfo on connect:", groupInfo);
+  console.log("groupInfo on connect:", groupInfo);
 io.to(groupId).emit("group-info-update", groupInfo);
   
   socket.emit("user-data", socket.user);

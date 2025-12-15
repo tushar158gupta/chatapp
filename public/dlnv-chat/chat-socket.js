@@ -1,9 +1,39 @@
 // public/main.js  ←  FULL FILE WITH ONLY group-online-count ADDED
 
+function createInitialsImageDataURL(
+  name,
+  size = 128,
+  textColor = "#ffffff",
+  bgColor = "#268cdf"
+) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = size;
+  canvas.height = size;
+
+  // Background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, size, size);
+
+  // Initials
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map(w => w.charAt(0).toUpperCase())
+    .join("");
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `${size / 2}px Arial`;
+
+  ctx.fillText(initials, size / 2, size / 2);
+
+  return canvas.toDataURL("image/png");
+}
+
 function startSocket(token, groupId) {
-  // console.log("[CHAT] Starting Socket.IO connection...");
-  // console.log("[CHAT] Token (first 30):", token.substring(0, 30) + "...");
-  // console.log("[CHAT] Group ID:", groupId);
 
   const socket = io({
     path: "/dlnv-chat/support/ws", 
@@ -95,7 +125,7 @@ function startSocket(token, groupId) {
   socket.on("user-data", (user) => {
     // console.log("[SOCKET] User data received:", user);
     document.getElementById("user-info").innerText =
-      `Logged in as: ${user?.name} (${user?.role})`;
+      `Logged in`;
     currentUserName = user.name;
   });
 
@@ -138,10 +168,12 @@ const userimage = participant?.image || null;
   // Send message
   messageform.addEventListener("submit", (e) => {
     e.preventDefault();
+    // console.log("Sending message... clicked");
     sendMessage();
   });
 
   function sendMessage() {
+    
     if (!messageinput.value.trim()) return;
 
     const msg = {
@@ -162,32 +194,52 @@ const userimage = participant?.image || null;
     messageinput.value = "";
   }
 
-  // Add message to UI
+
   function addMessageToUI(isOwn, data, scrollDown = true, prepend = false) {
-    clearFeedback();
+  clearFeedback();
 
-    const item = document.createElement("li");
-    item.className = isOwn ? "message-right" : "message-left";
+  const item = document.createElement("li");
+  item.className = isOwn ? "message-right" : "message-left";
 
-    item.innerHTML = `
-      <div class="message-bubble">
-        ${data.message}
-        <span class="message-meta">
-          ${data.sender || data.name} — ${moment(data.timestamp || data.dateTime).fromNow()}
-        </span>
+  let avatarHTML = "";
+
+  // 👉 SHOW IMAGE ONLY FOR OTHER USERS
+  if (!isOwn) {
+    const participant = window.groupInfo?.participants?.[data.userId];
+    const image = participant?.image;
+
+    avatarHTML = `
+      <div class="avatar">
+        ${
+          image
+            ? `<img src="${image}" alt="avatar" />`
+            : `<div class="avatar-fallback">${((data.sender).toUpperCase() || "U")[0]}</div>`
+        }
       </div>
     `;
-
-    if (prepend) {
-      messageContainer.prepend(item);
-    } else {
-      messageContainer.appendChild(item);
-    }
-
-    if (scrollDown) {
-      messageContainer.scrollTop = messageContainer.scrollHeight;
-    }
   }
+
+  item.innerHTML = `
+    ${avatarHTML}
+    <div class="message-bubble">
+      ${data.message}
+      <span class="message-meta">
+        ${data.sender} • ${moment(data.timestamp).fromNow()}
+      </span>
+    </div>
+  `;
+
+  if (prepend) {
+    messageContainer.prepend(item);
+  } else {
+    messageContainer.appendChild(item);
+  }
+
+  if (scrollDown) {
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+  }
+}
+
 
   // Typing indicator
   let typingTimer;
@@ -230,7 +282,7 @@ window.addEventListener("message", (event) => {
     // console.log("Token preview:", event.data.token.substring(0, 30) + "...");
     // console.log("Group ID:", event.data.groupId);
 
-    if(event.data.token==null || event.data.groupId){
+    if(event.data.token==null || ! event.data.groupId){
           window.IFRAME_TOKEN =  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  
           window.GROUP_ID = "1234";  
     }
