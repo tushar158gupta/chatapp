@@ -112,10 +112,17 @@ function startSocket(token, groupId) {
     // console.log("[SOCKET] Connected!");
   });
 
-  socket.on("group-info-update" , (groupInfo)=>{
-    window.groupInfo = groupInfo
-    // console.log("Received group info update:", groupInfo);
-  })
+socket.on("group-info-update", (groupInfo) => {
+  window.groupInfo = groupInfo;
+
+  const clientsTotalEl = document.getElementById("clients-total");
+
+  const active = groupInfo.activeClients ?? 0;
+  const total = groupInfo.totalClients ?? 0;
+
+  clientsTotalEl.innerText = `Active Clients: ${active} / ${total}`;
+});
+
 
   socket.on("connect_error", (err) => {
     console.error("[SOCKET ERROR]", err.message);
@@ -141,27 +148,56 @@ function startSocket(token, groupId) {
       const participant = window.groupInfo?.participants?.[userid] || null;
 const userimage = participant?.image || null;
 
-    window.parent.postMessage(
-      {
-        type: "NEW_CHAT_MESSAGE",
-        payload: {
-          message: data.message,
-          sender: data.sender,
-          groupId: data.groupId,
-          image: userimage
-        }
-      },
-      "*"
-    );
+    // window.parent.postMessage(
+    //   {
+    //     type: "NEW_CHAT_MESSAGE",
+    //     payload: {
+    //       message: data.message,
+    //       sender: data.sender,
+    //       groupId: data.groupId,
+    //       image: userimage
+    //     }
+    //   },
+    //   "*"
+    // );
+  const groupSettings = getGroupSettings(data.groupId);
+
+const senderRole = participant?.role; // advisor | trader | admin
+
+let shouldNotify = true;
+
+if (senderRole === "trader" && !groupSettings.clientNotification) {
+  shouldNotify = false;
+}
+
+if (senderRole === "advisor" && !groupSettings.advisorNotification) {
+  shouldNotify = false;
+}
+
+if (shouldNotify) {
+  window.parent.postMessage(
+    {
+      type: "NEW_CHAT_MESSAGE",
+      payload: {
+        message: data.message,
+        sender: data.sender,
+        groupId: data.groupId,
+        image: userimage
+      }
+    },
+    "*"
+  );
+}
+
   }
   });
 
   // ——————————————————————————————
   // 🔥 NEW LOGIC: UNIQUE USERS PER GROUP
   // ——————————————————————————————
-  socket.on("group-online-count", (count) => {
-    clienttotal.innerText = `Clients: ${count}`;
-  });
+  // socket.on("group-online-count", (count) => {
+  //   clienttotal.innerText = `Clients: ${count}`;
+  // });
 
   // (Your original clients-total is removed because Option A asked for group-based only)
 
@@ -293,4 +329,61 @@ window.addEventListener("message", (event) => {
     // Start the chat
     startSocket(window.IFRAME_TOKEN, window.GROUP_ID);
   }
+});
+
+function getNotificationSettings() {
+  return JSON.parse(localStorage.getItem("chatNotificationSettings")) || {
+    notification: {}
+  };
+}
+
+function saveNotificationSettings(data) {
+  localStorage.setItem(
+    "chatNotificationSettings",
+    JSON.stringify(data)
+  );
+}
+
+function getGroupSettings(groupId) {
+  const settings = getNotificationSettings();
+  return (
+    settings.notification[groupId] || {
+      advisorNotification: true,
+      clientNotification: true
+    }
+  );
+}
+
+function updateGroupSettings(groupId, newSettings) {
+  const settings = getNotificationSettings();
+  settings.notification[groupId] = newSettings;
+  saveNotificationSettings(settings);
+}
+const notifBtn = document.getElementById("notification-btn");
+const dropdown = document.getElementById("notification-dropdown");
+
+const muteTraderCheckbox = document.getElementById("mute-trader");
+const muteClientCheckbox = document.getElementById("mute-client");
+
+notifBtn.addEventListener("click", () => {
+  dropdown.classList.toggle("hidden");
+
+  // Load current group settings
+  const groupSettings = getGroupSettings(window.GROUP_ID);
+
+  muteTraderCheckbox.checked = !groupSettings.advisorNotification;
+  muteClientCheckbox.checked = !groupSettings.clientNotification;
+});
+
+// Save changes
+muteTraderCheckbox.addEventListener("change", () => {
+  const groupSettings = getGroupSettings(window.GROUP_ID);
+  groupSettings.advisorNotification = !muteTraderCheckbox.checked;
+  updateGroupSettings(window.GROUP_ID, groupSettings);
+});
+
+muteClientCheckbox.addEventListener("change", () => {
+  const groupSettings = getGroupSettings(window.GROUP_ID);
+  groupSettings.clientNotification = !muteClientCheckbox.checked;
+  updateGroupSettings(window.GROUP_ID, groupSettings);
 });

@@ -222,6 +222,68 @@ body {
   font-size: 14px;
 }
 
+.notification-wrapper {
+  position: relative;
+  cursor: pointer;
+}
+
+.notification-wrapper i {
+  font-size: 20px;
+}
+
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  background: white;
+  color: #333;
+  border-radius: 8px;
+  padding: 10px;
+  width: 220px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  z-index: 100;
+}
+
+.notification-dropdown label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.notification-dropdown label:last-child {
+  margin-bottom: 0;
+}
+
+.hidden {
+  display: none;
+}
+.clients-total {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
+.notification-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.notification-wrapper i {
+  font-size: 20px;
+}
+
+.notification-wrapper .clients-total {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
 
 /* Mobile */
 @media (max-width: 480px) {

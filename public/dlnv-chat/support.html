@@ -43,7 +43,27 @@
             <div class="support-group">DailyTrades Support Group</div>
         </div>
     </div>
-    <div class="clients-total" id="clients-total">Client: 0</div>
+<div class="notification-wrapper">
+  <i id="notification-btn" class="fas fa-bell"></i>
+
+  <div class="clients-total" id="clients-total">
+    Active Clients: 0 / 0
+  </div>
+
+  <div id="notification-dropdown" class="notification-dropdown hidden">
+    <label>
+      <input type="checkbox" id="mute-trader" />
+      Mute Trader Notifications
+    </label>
+
+    <label>
+      <input type="checkbox" id="mute-client" />
+      Mute Client Notifications
+    </label>
+  </div>
+</div>
+
+
 </header>
 
 <div class="chat-container">
