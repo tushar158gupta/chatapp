@@ -63,14 +63,6 @@ const server = app.listen(PORT, () => {
 const onlineGroupUsers = {};
 
 
-//----------------------------------------------------
-// 4) Decode JWT Without Secret (manual decode)
-//----------------------------------------------------
-function decodeJWT(token) {
-  const parts = token.split(".");
-  const payload = parts[1];
-  return JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
-}
 
 //----------------------------------------------------
 // 5) Initialize Socket.io
@@ -78,6 +70,18 @@ function decodeJWT(token) {
 const io = socketio(server, {
   path: "/dlnv-chat/support/ws", // custom path
 });
+
+const notificationIO = socketio(server, {
+  path: "/dlnv-chat/notify/ws",
+  cors: {
+    origin: ["http://localhost:4000" ,"http://localhost:4200"  , "http://localhost:4201"], // Next.js
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const JWT_SECRET = "d1nvdb4ndw3b517353cr37";
@@ -96,6 +100,44 @@ const ALLOWED_ROLES = [
 //----------------------------------------------------
 // 6) Socket authentication middleware
 //----------------------------------------------------
+
+
+notificationIO.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("No token"));
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = {
+      userId: decoded.user.id,
+      role: decoded.user.role || decoded.user.rType,
+      name: decoded.user.fName || "User",
+    };
+    next();
+  } catch (e) {
+    next(new Error("Invalid token"));
+  }
+});
+notificationIO.on("connection", (socket) => {
+  console.log(
+    "[NOTIFY SOCKET CONNECTED]",
+    socket.user.userId,
+    socket.user.role
+  );
+
+  socket.join(socket.user.userId);
+
+  socket.on("disconnect", () => {
+    console.log("[NOTIFY SOCKET DISCONNECTED]", socket.user.userId);
+  });
+});
+
+
+
+
+
+
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
 const  groupId = socket.handshake.auth.groupId;
@@ -116,6 +158,9 @@ const  groupId = socket.handshake.auth.groupId;
       name =`${decoded.user?.profile?.fName} ${ decoded.user?.profile?.lName}` 
     }else{
       name =`${decoded.user?.fName} ${ decoded.user?.lName}`  
+    }
+    if(decoded?.user?.rType?.toLowerCase() === "admin"){
+      name = "Daily Trades Admin"
     }
 
     socket.user = {
@@ -448,7 +493,7 @@ io.on("connection", async (socket) => {
   io.to(groupId).emit("group-online-count", onlineGroupUsers[groupId].size);
 
   const groupInfo = await getGroupInfo(groupId);
-  console.log("groupInfo on connect:", groupInfo);
+  // console.log("groupInfo on connect:", groupInfo);
 io.to(groupId).emit("group-info-update", groupInfo);
   
   socket.emit("user-data", socket.user);
@@ -470,6 +515,24 @@ io.to(groupId).emit("group-info-update", groupInfo);
     if (batchLen >= BATCH_SIZE) await flushBatchToMongo();
 
     socket.broadcast.to(data.groupId).emit("chat-message", messageObj);
+
+     // 🔥 NEW: send notification to ALL group members
+  const groupInfo = await getGroupInfo(data.groupId);
+
+  Object.keys(groupInfo.participants).forEach((uid) => {
+    if (uid !== socket.user.userId) {
+  notificationIO
+  .to(uid)
+  .emit("chat-notification", {
+    sender: socket.user.name,
+    senderRole: socket.user.role.toLowerCase(), // ✅ ADD THIS LINE
+    message: data.message,
+    image: groupInfo.participants[socket.user.userId]?.image || "",
+    groupId: data.groupId,
+  });
+
+    }
+  });
   });
 
   // ----- Handle Disconnect -----

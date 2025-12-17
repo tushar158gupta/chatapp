@@ -164,30 +164,30 @@ const userimage = participant?.image || null;
 
 const senderRole = participant?.role; // advisor | trader | admin
 
-let shouldNotify = true;
+// let shouldNotify = true;
 
-if (senderRole === "trader" && !groupSettings.clientNotification) {
-  shouldNotify = false;
-}
+// if (senderRole === "trader" && !groupSettings.clientNotification) {
+//   shouldNotify = false;
+// }
 
-if (senderRole === "advisor" && !groupSettings.advisorNotification) {
-  shouldNotify = false;
-}
+// if (senderRole === "advisor" && !groupSettings.advisorNotification) {
+//   shouldNotify = false;
+// }
 
-if (shouldNotify) {
-  window.parent.postMessage(
-    {
-      type: "NEW_CHAT_MESSAGE",
-      payload: {
-        message: data.message,
-        sender: data.sender,
-        groupId: data.groupId,
-        image: userimage
-      }
-    },
-    "*"
-  );
-}
+// if (shouldNotify) {
+//   window.parent.postMessage(
+//     {
+//       type: "NEW_CHAT_MESSAGE",
+//       payload: {
+//         message: data.message,
+//         sender: data.sender,
+//         groupId: data.groupId,
+//         image: userimage
+//       }
+//     },
+//     "*"
+//   );
+// }
 
   }
   });
