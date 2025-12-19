@@ -39,7 +39,7 @@
     <div class="header-left">
         <i class="fas fa-comments"></i>
         <div>
-            <div class="script-name">Script Name</div>
+          <div class="script-name" id="script-name">Loading...</div>
             <div class="support-group">DailyTrades Support Group</div>
         </div>
     </div>
@@ -66,8 +66,11 @@
 
 </header>
 
-<div class="chat-container">
-    <div id="user-info">Loading user...</div>
+<div id="chat-loader" class="chat-loader">
+  <div class="spinner"></div>
+</div>
+<div class="chat-container hidden" id="chat-container">
+    <div id="user-info">Welcome</div>
 
     <!-- Messages -->
     <ul id="message-container" class="message-container"></ul>

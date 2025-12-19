@@ -152,7 +152,7 @@ const  groupId = socket.handshake.auth.groupId;
     if (!ALLOWED_ROLES.includes(decoded?.user?.role || decoded?.user?.rType)) {
       return next(new Error("Unauthorized: Role not allowed"));
     }
-    console.log("Decoded JWT:", decoded);
+    // console.log("Decoded JWT:", decoded);
     let name = "";
     if(decoded.user?.profile?.fName){
       name =`${decoded.user?.profile?.fName} ${ decoded.user?.profile?.lName}` 
@@ -369,9 +369,15 @@ app.get(`/dlnv-chat/support/groupInfo`,verifyApiToken ,  async (req, res) => {
 async function getGroupInfo(groupId) {
   const activeClients = onlineGroupUsers[groupId]?.size || 0;
 
+  
+
   const openScripts = await OpenTraderScripts.find({
     scriptId: new mongoose.Types.ObjectId(groupId),
   });
+
+  console.log("openScripts Tushar:", openScripts);
+
+  const scriptTitle = openScripts[0]?.otherInfo?.script?.title || "Support Group";
 
   const traderIds = [
     ...new Set(openScripts.map((o) => o.traderId.toString())),
@@ -431,6 +437,7 @@ admins.forEach((adm) => {
 
   return {
     groupId,
+    scriptTitle,
     advisorId: advisorIds[0] || null,
     totalClients: traders.length,
     activeClients,
@@ -452,6 +459,7 @@ admins.forEach((adm) => {
   lname: adm?.lName || "Admin",
   userId: adm?._id,
   image: adm?.dp || "",
+
 })),
 
     
@@ -493,7 +501,7 @@ io.on("connection", async (socket) => {
   io.to(groupId).emit("group-online-count", onlineGroupUsers[groupId].size);
 
   const groupInfo = await getGroupInfo(groupId);
-  // console.log("groupInfo on connect:", groupInfo);
+  console.log("groupInfo on connect:", groupInfo);
 io.to(groupId).emit("group-info-update", groupInfo);
   
   socket.emit("user-data", socket.user);

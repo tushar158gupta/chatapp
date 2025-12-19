@@ -112,8 +112,28 @@ function startSocket(token, groupId) {
     // console.log("[SOCKET] Connected!");
   });
 
+// socket.on("group-info-update", (groupInfo) => {
+//   window.groupInfo = groupInfo;
+
+//   const clientsTotalEl = document.getElementById("clients-total");
+
+//   const active = groupInfo.activeClients ?? 0;
+//   const total = groupInfo.totalClients ?? 0;
+
+//   clientsTotalEl.innerText = `Active Clients: ${active} / ${total}`;
+
+
+// });
+
 socket.on("group-info-update", (groupInfo) => {
   window.groupInfo = groupInfo;
+
+  // 🔹 SET SCRIPT NAME FROM GROUP INFO
+  const scriptNameEl = document.getElementById("script-name");
+  if (scriptNameEl) {
+    scriptNameEl.innerText =
+      groupInfo?.scriptTitle || "Script";
+  }
 
   const clientsTotalEl = document.getElementById("clients-total");
 
@@ -125,16 +145,22 @@ socket.on("group-info-update", (groupInfo) => {
 
 
   socket.on("connect_error", (err) => {
+      document.getElementById("chat-container")?.classList.add("hidden");
     console.error("[SOCKET ERROR]", err.message);
     alert("Chat Access Denied: " + err.message);
   });
 
-  socket.on("user-data", (user) => {
-    // console.log("[SOCKET] User data received:", user);
-    document.getElementById("user-info").innerText =
-      `Logged in`;
-    currentUserName = user.name;
-  });
+socket.on("user-data", (user) => {
+  currentUserName = user.name;
+
+  // document.getElementById("user-info").innerText =
+  //   `Logged in as ${user.name}`;
+
+  // ✅ HIDE SPINNER, SHOW CHAT
+  document.getElementById("chat-loader")?.remove();
+  document.getElementById("chat-container")?.classList.remove("hidden");
+});
+
 
   socket.on("chat-message", (data) => {
     const isOwn = data.sender === currentUserName;
@@ -318,10 +344,10 @@ window.addEventListener("message", (event) => {
     // console.log("Token preview:", event.data.token.substring(0, 30) + "...");
     // console.log("Group ID:", event.data.groupId);
 
-    if(event.data.token==null || ! event.data.groupId){
-          window.IFRAME_TOKEN =  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  
-          window.GROUP_ID = "1234";  
-    }
+    // if(event.data.token==null || ! event.data.groupId){
+    //       window.IFRAME_TOKEN =  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  
+    //       window.GROUP_ID = "1234";  
+    // }
 
     window.IFRAME_TOKEN = event.data.token;
     window.GROUP_ID = event.data.groupId;
