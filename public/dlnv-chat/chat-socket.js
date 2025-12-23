@@ -384,11 +384,24 @@ function updateGroupSettings(groupId, newSettings) {
   const settings = getNotificationSettings();
   settings.notification[groupId] = newSettings;
   saveNotificationSettings(settings);
+
+  // 🔥 SEND TO PARENT
+  window.parent.postMessage(
+    {
+      type: "UPDATE_NOTIFICATION_SETTINGS",
+      payload: {
+        groupId,
+        settings: newSettings
+      }
+    },
+    "*"
+  );
 }
+
 const notifBtn = document.getElementById("notification-btn");
 const dropdown = document.getElementById("notification-dropdown");
 
-const muteTraderCheckbox = document.getElementById("mute-trader");
+const muteAdvisorCheckbox = document.getElementById("mute-advisor");
 const muteClientCheckbox = document.getElementById("mute-client");
 
 notifBtn.addEventListener("click", () => {
@@ -397,14 +410,14 @@ notifBtn.addEventListener("click", () => {
   // Load current group settings
   const groupSettings = getGroupSettings(window.GROUP_ID);
 
-  muteTraderCheckbox.checked = !groupSettings.advisorNotification;
+  muteAdvisorCheckbox.checked = !groupSettings.advisorNotification;
   muteClientCheckbox.checked = !groupSettings.clientNotification;
 });
 
 // Save changes
-muteTraderCheckbox.addEventListener("change", () => {
+muteAdvisorCheckbox.addEventListener("change", () => {
   const groupSettings = getGroupSettings(window.GROUP_ID);
-  groupSettings.advisorNotification = !muteTraderCheckbox.checked;
+  groupSettings.advisorNotification = !muteAdvisorCheckbox.checked;
   updateGroupSettings(window.GROUP_ID, groupSettings);
 });
 
