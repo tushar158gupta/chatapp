@@ -1,7 +1,3 @@
-// ===================================================
-// app.js - DLNV Chat & Notification Server
-// ===================================================
-
 const express = require("express");
 const path = require("path");
 const app = express();
@@ -9,8 +5,6 @@ const mongoose = require("mongoose");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const socketio = require("socket.io");
-
-// Models
 const OpenTraderScripts = require("./models/openTraderScripts.model");
 const Trader = require("./models/trader.model");
 const Advisor = require("./models/advisor.model");
@@ -19,9 +13,10 @@ const Associates = require("./models/associates.model");
 const PORT = process.env.PORT || 8000;
 require("dotenv").config();
 
-// ----------------------------------------------------
+
+//----------------------------------------------------
 // 1) Connect to MongoDB
-// ----------------------------------------------------
+//----------------------------------------------------
 mongoose
   .connect(
     "mongodb+srv://qareadonly:4daGEbRiLI68VTpK@dlnv-qa.svztmll.mongodb.net/dlnv-db?retryWrites=true&w=majority&appName=DLNV-QA"
@@ -42,9 +37,9 @@ const chatSchema = new mongoose.Schema({
 // Create chat model
 const Chat = mongoose.model("Chat", chatSchema);
 
-// ----------------------------------------------------
-// 2) Connect to Redis (for message batching)
-// ----------------------------------------------------
+//----------------------------------------------------
+// 2) Connect to Redis
+//----------------------------------------------------
 const redis = createClient({
   url: "rediss://default:ASmWAAIncDJmZjQzZWVjYzhkZGM0ZDkxYmY0MDljNzJmMjg3YzRhMHAyMTA2NDY@meet-moose-10646.upstash.io:6379",
   socket: { tls: true, rejectUnauthorized: false },
@@ -55,17 +50,39 @@ redis.connect();
 redis.on("ready", () => console.log("Redis connected"));
 redis.on("error", (err) => console.error("Redis error", err));
 
-// ----------------------------------------------------
+//----------------------------------------------------
 // 3) Start Express Server
-// ----------------------------------------------------
+//----------------------------------------------------
 const server = app.listen(PORT, () => {
   console.log("Server running on", PORT);
 });
 
-// ----------------------------------------------------
-// 4) Global Variables & Constants
-// ----------------------------------------------------
-const onlineGroupUsers = {}; // { groupId: Set(userId) } - tracks unique online users per group
+
+// set to save users
+
+const onlineGroupUsers = {};
+
+
+
+//----------------------------------------------------
+// 5) Initialize Socket.io
+//----------------------------------------------------
+const io = socketio(server, {
+  path: "/dlnv-chat/support/ws", // custom path
+});
+
+const notificationIO = socketio(server, {
+  path: "/dlnv-chat/notify/ws",
+  cors: {
+    origin: ["http://localhost:4000" ,"http://localhost:4200"  , "http://localhost:4201"], // Next.js
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+
+
+app.use(express.static(path.join(__dirname, "public")));
 
 const JWT_SECRET = "d1nvdb4ndw3b517353cr37";
 const ALLOWED_ROLES = [
@@ -80,30 +97,11 @@ const ALLOWED_ROLES = [
   "Trader",
 ];
 
-// Serve static files (chat UI)
-app.use(express.static(path.join(__dirname, "public")));
+//----------------------------------------------------
+// 6) Socket authentication middleware
+//----------------------------------------------------
 
-// ----------------------------------------------------
-// 5) Initialize Socket.IO Instances
-// ----------------------------------------------------
-// Main chat socket (custom path)
-const io = socketio(server, {
-  path: "/dlnv-chat/support/ws", // custom path
-});
 
-// Notification socket (separate namespace)
-const notificationIO = socketio(server, {
-  path: "/dlnv-chat/notify/ws",
-  cors: {
-    origin: ["http://localhost:4000", "http://localhost:4200", "http://localhost:4201"],
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
-
-// ----------------------------------------------------
-// 6) Notification Socket Authentication & Connection Handling
-// ----------------------------------------------------
 notificationIO.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("No token"));
@@ -120,7 +118,6 @@ notificationIO.use((socket, next) => {
     next(new Error("Invalid token"));
   }
 });
-
 notificationIO.on("connection", (socket) => {
   console.log(
     "[NOTIFY SOCKET CONNECTED]",
@@ -135,15 +132,19 @@ notificationIO.on("connection", (socket) => {
   });
 });
 
-// ----------------------------------------------------
-// 7) Main Chat Socket Authentication Middleware
-// ----------------------------------------------------
+
+
+
+
+
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  const groupId = socket.handshake.auth.groupId;
+const  groupId = socket.handshake.auth.groupId;
 
   if (!token) return next(new Error("Unauthorized: No token provided"));
   if (!groupId) return next(new Error("Unauthorized: No groupId provided"));
+
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -151,31 +152,21 @@ io.use((socket, next) => {
     if (!ALLOWED_ROLES.includes(decoded?.user?.role || decoded?.user?.rType)) {
       return next(new Error("Unauthorized: Role not allowed"));
     }
-
+    // console.log("Decoded JWT:", decoded);
     let name = "";
-    if (decoded.user?.profile?.fName) {
-      name = `${decoded.user?.profile?.fName} ${decoded.user?.profile?.lName}`;
-    } else {
-      name = `${decoded.user?.fName} ${decoded.user?.lName}`;
+    if(decoded.user?.profile?.fName){
+      name =`${decoded.user?.profile?.fName} ${ decoded.user?.profile?.lName}` 
+    }else{
+      name =`${decoded.user?.fName} ${ decoded.user?.lName}`  
     }
-    if (decoded?.user?.rType?.toLowerCase() === "admin") {
-      name = "Daily Trades Admin";
-    }
-    // console.log("Decoded user info:", decoded.user);
-    if (decoded?.user?.role?.toLowerCase() === "trader") {
-      name  = Trader.findById(decoded.user?.id).then(trader => {
-        if (trader && trader.profile) {
-          return `${trader.profile.fName} ${trader.profile.lName}`;
-        } else {
-          return name;
-        } })
-        console.log("Trader name fetched:", name);
+    if(decoded?.user?.rType?.toLowerCase() === "admin"){
+      name = "Daily Trades Admin"
     }
 
     socket.user = {
       name: name,
       email: decoded.user?.profile?.email || decoded?.user?.email,
-      role: decoded.user?.role || decoded?.user?.role || decoded?.user?.rType,
+      role: decoded.user?.role || decoded?.user?.role||decoded?.user?.rType,
       userId: decoded.user?.id,
     };
 
@@ -185,9 +176,22 @@ io.use((socket, next) => {
   }
 });
 
-// ----------------------------------------------------
-// 8) Helper: API Token Verification Middleware
-// ----------------------------------------------------
+//----------------------------------------------------
+// 7) Redis batching
+//----------------------------------------------------
+const BATCH_KEY = "batchMessages";
+const BATCH_SIZE = 20;
+
+async function flushBatchToMongo() {
+  const batch = await redis.lRange(BATCH_KEY, 0, -1);
+  if (batch.length === 0) return;
+
+  const docs = batch.map((m) => JSON.parse(m));
+  // await Chat.insertMany(docs);
+  // console.log("Flushed", batch.length, "messages to MongoDB");
+  // await redis.del(BATCH_KEY);
+}
+
 async function verifyApiToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -203,10 +207,12 @@ async function verifyApiToken(req, res, next) {
 
     const token = authHeader.split(" ")[1];
 
-    // Verify JWT
+    // ✅ Verify JWT
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const role = decoded?.user?.role || decoded?.user?.rType;
+    const role =
+      decoded?.user?.role ||
+      decoded?.user?.rType;
 
     if (!ALLOWED_ROLES.includes(role)) {
       return res.status(403).json({ message: "Forbidden: Role not allowed" });
@@ -214,7 +220,7 @@ async function verifyApiToken(req, res, next) {
 
     const userId = decoded.user?.id;
 
-    // GROUP ACCESS CHECK
+    // 🔥 GROUP ACCESS CHECK
     let hasAccess = false;
 
     // Admin → always allowed
@@ -232,8 +238,10 @@ async function verifyApiToken(req, res, next) {
           break;
         }
 
-        // Advisor
-        if (os.otherInfo?.script?.userId?.toString() === userId) {
+        // Advisor (nested path)
+        if (
+          os.otherInfo?.script?.userId?.toString() === userId
+        ) {
           hasAccess = true;
           break;
         }
@@ -246,11 +254,13 @@ async function verifyApiToken(req, res, next) {
       });
     }
 
-    // Attach user to request
+    // ✅ Attach user to request
     req.user = {
       userId,
       role,
-      email: decoded.user?.profile?.email || decoded.user?.email,
+      email:
+        decoded.user?.profile?.email ||
+        decoded.user?.email,
       name: decoded.user?.profile?.fName
         ? `${decoded.user.profile.fName} ${decoded.user.profile.lName || ""}`
         : `${decoded.user?.fName || ""} ${decoded.user?.lName || ""}`,
@@ -265,109 +275,12 @@ async function verifyApiToken(req, res, next) {
   }
 }
 
-// ----------------------------------------------------
-// 9) Helper: Get Group Information (used in sockets & API)
-// ----------------------------------------------------
-async function getGroupInfo(groupId) {
-  const activeClients = onlineGroupUsers[groupId]?.size || 0;
 
-  const openScripts = await OpenTraderScripts.find({
-    scriptId: new mongoose.Types.ObjectId(groupId),
-  });
 
-  // console.log("openScripts :", openScripts);
-
-  const scriptTitle = openScripts[0]?.otherInfo?.script?.title || "Support Group";
-
-  const traderIds = [
-    ...new Set(openScripts.map((o) => o.traderId.toString())),
-  ];
-
-  const advisorIds = [
-    ...new Set(openScripts.map((o) => o.otherInfo.script.userId.toString())),
-  ];
-
-  const traders = await Trader.find(
-    { _id: { $in: traderIds } },
-    { "profile.fName": 1, "profile.lName": 1 }
-  );
-
-  const admins = await Associates.find();
-
-  const advisors = await Advisor.find(
-    { _id: { $in: advisorIds } },
-    { fName: 1, lName: 1, dp: 1 }
-  );
-
-  // Build participants map
-  const participants = {};
-
-  // Advisors
-  advisors.forEach((a) => {
-    participants[a._id.toString()] = {
-      fname: a.fName || "",
-      lname: a.lName || "",
-      userId: a._id,
-      image: a.dp || "",
-      role: "advisor",
-    };
-  });
-
-  // Traders
-  traders.forEach((t) => {
-    participants[t._id.toString()] = {
-      fname: t.profile?.fName || "",
-      lname: t.profile?.lName || "",
-      userId: t._id,
-      image: "",
-      role: "trader",
-    };
-  });
-
-  // Admins
-  admins.forEach((adm) => {
-    participants[adm._id.toString()] = {
-      fname: adm?.fName || "Daily Trades",
-      lname: adm?.lName || "Admin",
-      userId: adm?._id,
-      image: adm?.dp || "",
-      role: "admin",
-    };
-  });
-
-  return {
-    groupId,
-    scriptTitle,
-    advisorId: advisorIds[0] || null,
-    totalClients: traders.length,
-    activeClients,
-    participants,
-    advisorInfo: advisors.map((a) => ({
-      fname: a.fName,
-      lname: a.lName,
-      userId: a._id,
-      image: a.dp || "",
-    })),
-    traderInfo: traders.map((t) => ({
-      fname: t.profile?.fName,
-      lname: t.profile?.lName,
-      userId: t._id,
-      image: "",
-    })),
-    adminInfo: admins.map((adm) => ({
-      fname: adm?.fName || "Daily Trades",
-      lname: adm?.lName || "Admin",
-      userId: adm?._id,
-      image: adm?.dp || "",
-    })),
-  };
-}
-
-// ----------------------------------------------------
-// 10) API Routes
-// ----------------------------------------------------
-// Fetch chat messages (from Redis batch + MongoDB)
-app.get("/dlnv-chat/support/messages", verifyApiToken, async (req, res) => {
+//----------------------------------------------------
+// 9) Fetch messages
+//----------------------------------------------------
+app.get("/dlnv-chat/support/messages" ,verifyApiToken ,   async (req, res) => {
   const groupId = req.query.groupId;
   const limit = parseInt(req.query.limit || 20);
   const before = req.query.before;
@@ -391,17 +304,18 @@ app.get("/dlnv-chat/support/messages", verifyApiToken, async (req, res) => {
 
   res.json(all.reverse());
 });
-
-// Get group info (members, online count, etc.)
-app.get(`/dlnv-chat/support/groupInfo`, verifyApiToken, async (req, res) => {
+app.get(`/dlnv-chat/support/groupInfo`,verifyApiToken ,  async (req, res) => {
   try {
     const groupId = req.query.groupId;
     const activeClients = onlineGroupUsers[groupId]?.size || 0;
+    // console.log("jai shree ram",activeClients)
 
+    // 1️⃣ Get all OpenTraderScripts for this group
     const openScripts = await OpenTraderScripts.find({
       scriptId: new mongoose.Types.ObjectId(groupId),
     });
 
+    // 2️⃣ Extract unique traderIds & advisorIds
     const traderIds = [
       ...new Set(openScripts.map((o) => o.traderId.toString())),
     ];
@@ -409,16 +323,19 @@ app.get(`/dlnv-chat/support/groupInfo`, verifyApiToken, async (req, res) => {
       ...new Set(openScripts.map((o) => o.otherInfo.script.userId.toString())),
     ];
 
+    // 3️⃣ Fetch Traders
     const traders = await Trader.find(
       { _id: { $in: traderIds } },
       { "profile.fName": 1, "profile.lName": 1 }
     );
 
+    // 4️⃣ Fetch Advisors
     const advisors = await Advisor.find(
       { _id: { $in: advisorIds } },
       { fName: 1, lName: 1, dp: 1 }
     );
 
+    // 5️⃣ Build response objects
     const traderInfo = traders.map((t) => ({
       fname: t.profile?.fName || "",
       lname: t.profile?.lName || "",
@@ -448,55 +365,148 @@ app.get(`/dlnv-chat/support/groupInfo`, verifyApiToken, async (req, res) => {
   }
 });
 
-// ----------------------------------------------------
-// 11) Redis Batching Constants & Flush Function
-// ----------------------------------------------------
-const BATCH_KEY = "batchMessages";
-const BATCH_SIZE = 20;
 
-async function flushBatchToMongo() {
-  const batch = await redis.lRange(BATCH_KEY, 0, -1);
-  if (batch.length === 0) return;
+async function getGroupInfo(groupId) {
+  const activeClients = onlineGroupUsers[groupId]?.size || 0;
 
-  const docs = batch.map((m) => JSON.parse(m));
-  // await Chat.insertMany(docs);
-  // console.log("Flushed", batch.length, "messages to MongoDB");
-  // await redis.del(BATCH_KEY);
+  
+
+  const openScripts = await OpenTraderScripts.find({
+    scriptId: new mongoose.Types.ObjectId(groupId),
+  });
+
+  console.log("openScripts Tushar:", openScripts);
+
+  const scriptTitle = openScripts[0]?.otherInfo?.script?.title || "Support Group";
+
+  const traderIds = [
+    ...new Set(openScripts.map((o) => o.traderId.toString())),
+  ];
+
+  const advisorIds = [
+    ...new Set(openScripts.map((o) => o.otherInfo.script.userId.toString())),
+  ];
+
+  const traders = await Trader.find(
+    { _id: { $in: traderIds } },
+    { "profile.fName": 1, "profile.lName": 1 }
+  );
+
+  const admins = await Associates.find();
+
+  const advisors = await Advisor.find(
+    { _id: { $in: advisorIds } },
+    { fName: 1, lName: 1, dp: 1 }
+  );
+
+  // 🔥 BUILD PARTICIPANTS MAP
+  const participants = {};
+
+  // Advisors
+  advisors.forEach((a) => {
+    participants[a._id.toString()] = {
+      fname: a.fName || "",
+      lname: a.lName || "",
+      userId: a._id,
+      image: a.dp || "",
+      role: "advisor",
+    };
+  });
+
+  // Traders
+  traders.forEach((t) => {
+    participants[t._id.toString()] = {
+      fname: t.profile?.fName || "",
+      lname: t.profile?.lName || "",
+      userId: t._id,
+      image: "",
+      role: "trader",
+    };
+  });
+  // Admins
+admins.forEach((adm) => {
+  participants[adm._id.toString()] = {
+    fname: adm?.fName || "Daily Trades",
+    lname: adm?.lName || "Admin",
+    userId: adm?._id,
+    image: adm?.dp || "",
+    role: "admin",
+  };
+});
+
+
+  return {
+    groupId,
+    scriptTitle,
+    advisorId: advisorIds[0] || null,
+    totalClients: traders.length,
+    activeClients,
+    participants, // ✅ HERE
+    advisorInfo: advisors.map((a) => ({
+      fname: a.fName,
+      lname: a.lName,
+      userId: a._id,
+      image: a.dp || "",
+    })),
+    traderInfo: traders.map((t) => ({
+      fname: t.profile?.fName,
+      lname: t.profile?.lName,
+      userId: t._id,
+      image: "",
+    })),
+    adminInfo: admins.map((adm) => ({
+  fname: adm?.fName || "Daily Trades",
+  lname: adm?.lName || "Admin",
+  userId: adm?._id,
+  image: adm?.dp || "",
+
+})),
+
+    
+  };
 }
 
-// ----------------------------------------------------
-// 12) Main Chat Socket Connection Handling
-// ----------------------------------------------------
+//----------------------------------------------------
+// 10) UNIQUE ONLINE USER PER GROUP LOGIC
+//----------------------------------------------------
+
+// { groupId: Set(userIds) }
+
 io.on("connection", async (socket) => {
+  
   const groupId = socket.handshake.auth.groupId;
   const userId = socket.user.userId;
 
+  
   if (!groupId || !userId) return;
-
+  
   socket.join(groupId);
-
+  
   if (!onlineGroupUsers[groupId]) {
     onlineGroupUsers[groupId] = new Set();
   }
-
+  
   const role = socket.user.role;
+  // console.log("User role========================:", role);
 
-  if (role?.toLowerCase() !== "admin" && role?.toLowerCase() !== "advisor") {
-    onlineGroupUsers[groupId].add(userId);
+  if (role?.toLowerCase() !="admin"&& role?.toLowerCase()!="advisor") {
+    // console.log("***************************" , role.toLowerCase());
+  onlineGroupUsers[groupId].add(userId);
+   
   }
 
-  // Emit online count to group
+  
+  
+  // Emit count ONLY to this group
   io.to(groupId).emit("group-online-count", onlineGroupUsers[groupId].size);
 
-  // Send updated group info
   const groupInfo = await getGroupInfo(groupId);
-  // console.log("groupInfo on connect:", groupInfo);
-  io.to(groupId).emit("group-info-update", groupInfo);
-
-  // Send user data to the connected client
+  console.log("groupInfo on connect:", groupInfo);
+io.to(groupId).emit("group-info-update", groupInfo);
+  
   socket.emit("user-data", socket.user);
 
-  // Handle incoming messages
+  // ----- Handle Messages -----
   socket.on("message", async (data) => {
     const messageObj = {
       sender: socket.user.name,
@@ -512,29 +522,29 @@ io.on("connection", async (socket) => {
     const batchLen = await redis.lLen(BATCH_KEY);
     if (batchLen >= BATCH_SIZE) await flushBatchToMongo();
 
-    // Broadcast message to others in group
     socket.broadcast.to(data.groupId).emit("chat-message", messageObj);
 
-    // Send push notification to all group members (except sender)
-    const groupInfo = await getGroupInfo(data.groupId);
+     // 🔥 NEW: send notification to ALL group members
+  const groupInfo = await getGroupInfo(data.groupId);
 
-    Object.keys(groupInfo.participants).forEach((uid) => {
-      if (uid !== socket.user.userId) {
-        notificationIO
-          .to(uid)
-          .emit("chat-notification", {
-            sender: socket.user.name,
-            senderRole: socket.user.role.toLowerCase(),
-            message: data.message,
-            image: groupInfo.participants[socket.user.userId]?.image || "",
-            groupId: data.groupId,
-          });
-      }
-    });
+  Object.keys(groupInfo.participants).forEach((uid) => {
+    if (uid !== socket.user.userId) {
+  notificationIO
+  .to(uid)
+  .emit("chat-notification", {
+    sender: socket.user.name,
+    senderRole: socket.user.role.toLowerCase(), // ✅ ADD THIS LINE
+    message: data.message,
+    image: groupInfo.participants[socket.user.userId]?.image || "",
+    groupId: data.groupId,
   });
 
-  // Handle disconnect
-  socket.on("disconnect", async () => {
+    }
+  });
+  });
+
+  // ----- Handle Disconnect -----
+  socket.on("disconnect", async() => {
     if (onlineGroupUsers[groupId]) {
       onlineGroupUsers[groupId].delete(userId);
 
@@ -547,15 +557,15 @@ io.on("connection", async (socket) => {
       "group-online-count",
       onlineGroupUsers[groupId]?.size || 0
     );
-
     const groupInfo = await getGroupInfo(groupId);
-    io.to(groupId).emit("group-info-update", groupInfo);
+io.to(groupId).emit("group-info-update", groupInfo);
+
   });
 });
 
-// ----------------------------------------------------
-// 13) Auto-flush Redis batch every 10 seconds (currently commented)
-// ----------------------------------------------------
+//----------------------------------------------------
+// 11) Auto flush
+//----------------------------------------------------
 setInterval(() => {
   // flushBatchToMongo();
 }, 10000);
