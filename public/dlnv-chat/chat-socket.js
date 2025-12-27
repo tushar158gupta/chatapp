@@ -174,56 +174,14 @@ socket.on("user-data", (user) => {
       const participant = window.groupInfo?.participants?.[userid] || null;
 const userimage = participant?.image || null;
 
-    // window.parent.postMessage(
-    //   {
-    //     type: "NEW_CHAT_MESSAGE",
-    //     payload: {
-    //       message: data.message,
-    //       sender: data.sender,
-    //       groupId: data.groupId,
-    //       image: userimage
-    //     }
-    //   },
-    //   "*"
-    // );
   const groupSettings = getGroupSettings(data.groupId);
 
 const senderRole = participant?.role; // advisor | trader | admin
 
-// let shouldNotify = true;
-
-// if (senderRole === "trader" && !groupSettings.clientNotification) {
-//   shouldNotify = false;
-// }
-
-// if (senderRole === "advisor" && !groupSettings.advisorNotification) {
-//   shouldNotify = false;
-// }
-
-// if (shouldNotify) {
-//   window.parent.postMessage(
-//     {
-//       type: "NEW_CHAT_MESSAGE",
-//       payload: {
-//         message: data.message,
-//         sender: data.sender,
-//         groupId: data.groupId,
-//         image: userimage
-//       }
-//     },
-//     "*"
-//   );
-// }
 
   }
   });
 
-  // ——————————————————————————————
-  // 🔥 NEW LOGIC: UNIQUE USERS PER GROUP
-  // ——————————————————————————————
-  // socket.on("group-online-count", (count) => {
-  //   clienttotal.innerText = `Clients: ${count}`;
-  // });
 
   // (Your original clients-total is removed because Option A asked for group-based only)
 
