@@ -186,33 +186,59 @@ const senderRole = participant?.role; // advisor | trader | admin
   // (Your original clients-total is removed because Option A asked for group-based only)
 
   // Send message
-  messageform.addEventListener("submit", (e) => {
+messageinput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    // console.log("Sending message... clicked");
     sendMessage();
+  }
+});
+
+
+  // function sendMessage() {
+    
+  //   if (!messageinput.value.trim()) return;
+
+  //   const msg = {
+  //     message: messageinput.value.trim(),
+  //     groupId: window.GROUP_ID
+  //   };
+
+  //   socket.emit("message", msg);
+
+  //   const outgoingMsg = {
+  //     sender: currentUserName,
+  //     message: msg.message,
+  //     timestamp: new Date(),
+  //     groupId: window.GROUP_ID
+  //   };
+
+  //   addMessageToUI(true, outgoingMsg);
+  //   messageinput.value = "";
+  // }
+function sendMessage() {
+  messageinput.value = "";
+messageinput.style.height = "auto";
+
+  const text = messageinput.value;
+
+  if (!text.trim()) return;
+
+  const msg = {
+    message: text,
+    groupId: window.GROUP_ID
+  };
+
+  socket.emit("message", msg);
+
+  addMessageToUI(true, {
+    sender: currentUserName,
+    message: text,
+    timestamp: new Date(),
+    groupId: window.GROUP_ID
   });
 
-  function sendMessage() {
-    
-    if (!messageinput.value.trim()) return;
-
-    const msg = {
-      message: messageinput.value.trim(),
-      groupId: window.GROUP_ID
-    };
-
-    socket.emit("message", msg);
-
-    const outgoingMsg = {
-      sender: currentUserName,
-      message: msg.message,
-      timestamp: new Date(),
-      groupId: window.GROUP_ID
-    };
-
-    addMessageToUI(true, outgoingMsg);
-    messageinput.value = "";
-  }
+  messageinput.value = "";
+}
 
 
   function addMessageToUI(isOwn, data, scrollDown = true, prepend = false) {
@@ -241,8 +267,8 @@ const senderRole = participant?.role; // advisor | trader | admin
 
   item.innerHTML = `
     ${avatarHTML}
-    <div class="message-bubble">
-      ${data.message}
+<div class="message-bubble">
+  <pre class="message-text">${escapeHTML(data.message)}</pre>
       <span class="message-meta">
         ${data.sender} • ${moment(data.timestamp).fromNow()}
       </span>
@@ -275,6 +301,14 @@ const senderRole = participant?.role; // advisor | trader | admin
     clearTimeout(typingTimer);
     if (e.key !== "Enter") typingTimer = setTimeout(stopTyping, 1000);
   });
+  messageinput.addEventListener("input", () => {
+  messageinput.style.height = "auto";
+
+  const maxHeight = 84; // same as CSS max-height
+  messageinput.style.height =
+    Math.min(messageinput.scrollHeight, maxHeight) + "px";
+});
+
 
   socket.on("feedback", (data) => {
     clearFeedback();
@@ -295,24 +329,29 @@ const senderRole = participant?.role; // advisor | trader | admin
 // RECEIVE TOKEN FROM ANGULAR PARENT PAGE
 // ————————————————————————————————————————
 window.addEventListener("message", (event) => {
-  // console.log("[IFRAME] postMessage received:", event.data);
+  if (event.data?.type !== "SEND_TOKEN") return;
 
-  if (event.data?.type === "SEND_TOKEN") {
-    // console.log("TOKEN & GROUPID RECEIVED FROM ANGULAR!");
-    // console.log("Token preview:", event.data.token.substring(0, 30) + "...");
-    // console.log("Group ID:", event.data.groupId);
+  const { token, groupId } = event.data;
 
-    // if(event.data.token==null || ! event.data.groupId){
-    //       window.IFRAME_TOKEN =  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJPbmxpbmUgSldUIEJ1aWxkZXIiLCJpYXQiOjE3NjQ1Nzk5NDcsImV4cCI6MTc5NjExNTk0NywiYXVkIjoidGVzdCIsInN1YiI6InRlc3QiLCJHaXZlbk5hbWUiOiJLYXJhbiIsIlN1cm5hbWUiOiIuIiwiRW1haWwiOiJLYXJhbkBleGFtcGxlLmNvbSIsIlJvbGUiOiJBZG1pbiJ9.PAE7HcQguhb4bh2hLH5qQrvaHJpQsbbI8T3P6u6QGyE";  
-    //       window.GROUP_ID = "1234";  
-    // }
 
-    window.IFRAME_TOKEN = event.data.token;
-    window.GROUP_ID = event.data.groupId;
-
-    // Start the chat
-    startSocket(window.IFRAME_TOKEN, window.GROUP_ID);
+  if (!token || !groupId) {
+    console.warn(
+      "[IFRAME] Missing token or groupId. Waiting...",
+      { token: !!token, groupId }
+    );
+    return;
   }
+
+  // Prevent duplicate socket starts
+  if (window.__CHAT_SOCKET_STARTED__) return;
+  window.__CHAT_SOCKET_STARTED__ = true;
+
+  window.IFRAME_TOKEN = token;
+  window.GROUP_ID = groupId;
+
+  console.log("[IFRAME] Token & GroupId received. Starting socket...");
+
+  startSocket(token, groupId);
 });
 
 function getNotificationSettings() {
@@ -384,3 +423,10 @@ muteClientCheckbox.addEventListener("change", () => {
   groupSettings.clientNotification = !muteClientCheckbox.checked;
   updateGroupSettings(window.GROUP_ID, groupSettings);
 });
+
+function escapeHTML(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}

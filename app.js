@@ -138,7 +138,7 @@ notificationIO.on("connection", (socket) => {
 // ----------------------------------------------------
 // 7) Main Chat Socket Authentication Middleware
 // ----------------------------------------------------
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
   const groupId = socket.handshake.auth.groupId;
 
@@ -161,9 +161,9 @@ io.use((socket, next) => {
     if (decoded?.user?.rType?.toLowerCase() === "admin") {
       name = "Daily Trades Admin";
     }
-    // console.log("Decoded user info:", decoded.user);
+    console.log("Decoded user info:", decoded.user);
     if (decoded?.user?.role?.toLowerCase() === "trader") {
-      name  = Trader.findById(decoded.user?.id).then(trader => {
+      name  = await Trader.findById(decoded.user?.id).then(trader => {
         if (trader && trader.profile) {
           return `${trader.profile.fName} ${trader.profile.lName}`;
         } else {
